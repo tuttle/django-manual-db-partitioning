@@ -1,0 +1,2 @@
+This project is a proof-of-concept implementation of the vertical database
+table partitioning made purely in Python.
