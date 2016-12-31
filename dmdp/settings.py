@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'dmdp.apps.datastore',
 ]
 
 MIDDLEWARE_CLASSES = [
@@ -76,8 +78,13 @@ WSGI_APPLICATION = 'dmdp.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'dmdp',
+        'USER': 'dmdp',
+        'PASSWORD': 'dmdp',
+        'HOST': '',  # PostgreSQL, an empty string means to use a faster Unix domain socket for the connection
+        'ATOMIC_REQUESTS': True,
+        'CONN_MAX_AGE': 1800,
     }
 }
 
@@ -119,3 +126,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.9/howto/static-files/
 
 STATIC_URL = '/static/'
+
+
+# Start all table partitioning at this year-month by default.
+TIMESTAMP_PARTITIONING_START_YM = (2016, 10)
