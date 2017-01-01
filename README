@@ -1,15 +1,34 @@
 This project is a proof-of-concept implementation of the vertical database
 table partitioning made purely in Python.
 
+
 Recommendations:
 
 	* Clone into a virtualenv
 
-	* Install Django 1.9 and psycopg2
+	* Install these PyPI:
+
+	    Django 1.9
+	    psycopg2
 
 	* Create database:
 
 	    CREATE ROLE dmdp LOGIN ENCRYPTED PASSWORD 'dmdp';
 	    CREATE DATABASE "dmdp" WITH ENCODING='UTF8' OWNER=dmdp;
  
-	* Run `/path/to/venv/bin/python ./manage.py migrate` to create first set of models.
+	* Run this to create the first set of models::
+
+		/path/to/venv/bin/python ./manage.py migrate
+
+	* Run this to exercise the code::
+
+		/path/to/venv/bin/python ./manage.py dataplay
+
+
+Drawbacks:
+
+New partitions get created via *standard* Django migrations, so no other
+infrastructure is involved, which is good.
+
+But the same also means new partitions only get created (as time goes by)
+via the *source code change* using the `makemigrations` management command.

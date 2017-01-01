@@ -23,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'i(=vkilj5u^s85s0!i8cn3-j%ch!2$c6vbu(=l&(mu#kcc&tg-'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = []
 
@@ -127,6 +127,28 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+# Makes the django.db.backends to log all SQL queries for debugging purposes.
+LOGGING = {
+    'version': 1,
+    'filters': {
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        }
+    },
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',
+            'filters': ['require_debug_true'],
+            'class': 'logging.StreamHandler',
+        }
+    },
+    'loggers': {
+        'django.db.backends': {
+            'level': 'DEBUG',
+            'handlers': ['console'],
+        }
+    }
+}
 
 # Start all table partitioning at this year-month by default.
 TIMESTAMP_PARTITIONING_START_YM = (2016, 10)

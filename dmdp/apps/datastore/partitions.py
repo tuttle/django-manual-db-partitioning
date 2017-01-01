@@ -13,7 +13,7 @@ class ForeignKeyToPartition(object):
         @make_model_monthly_partitioned(globals())
         class Event(models.Model):
             ...
-            browser = ForeignKeyToPartition(Browser)
+            browser = ForeignKeyToPartition(Browser, related_name='event_set')
 
     """
     def __init__(self, target_partitioned_model, *fk_args, **fk_kwargs):
@@ -98,14 +98,14 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
                 raise RuntimeError("Model %s already exists!" % model_name)
 
             class Meta:
-                verbose_name = verbose_name_plural = model_name
+                verbose_name = verbose_name_plural = '%s (%04d/%02d)' % (name, year, month)
 
             attrs = {
                 '__module__': module_globals['__name__'],
                 'Meta': Meta,
             }
 
-            # Convert all ForeignKeyToPartition promises to appropriate ForeignKey.
+            # Reflect all the ForeignKeyToPartition promises as appropriate ForeignKey fields.
 
             for fk_field_name, proxy in model_class.__dict__.items():
                 if isinstance(proxy, ForeignKeyToPartition):
@@ -123,7 +123,7 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
                 attrs,
             )
 
-        def YM(year, month=None):
+        def YM(year=None, month=None):
             """
             A static method to retrieve specific model for month partition.
             Accepts either year and month integers or a date/datetime object.
@@ -132,8 +132,13 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
             <class 'dmdp.apps.datastore.models.Event_2016_12'>
             >>> Event.YM(datetime.date.today())
             <class 'dmdp.apps.datastore.models.Event_2016_12'>
+            >>> Event.YM()  # for current month
+            <class 'dmdp.apps.datastore.models.Event_2016_12'>
             """
             if month is None:
+                if year is None:
+                    year = datetime.date.today()
+
                 month = year.month
                 year = year.year
 
