@@ -2,6 +2,7 @@ import datetime
 
 from django.conf import settings
 from django.db.models import ForeignKey
+from django.utils import timezone
 
 
 class ForeignKeyToPartition(object):
@@ -26,7 +27,7 @@ def resolve_month(ym):
     """
     >>> resolve_month(None)
     24204     # integer value of current month 2016-12
-    >>> resolve_month(datetime.date.today())
+    >>> resolve_month(timezone.now())
     24204
     >>> resolve_month( (2017, 1) )
     24205
@@ -40,7 +41,7 @@ def resolve_month(ym):
     elif isinstance(ym, (datetime.datetime, datetime.date)):
         y, m = ym.year, ym.month
     elif isinstance(ym, int) or ym is None:
-        today = datetime.date.today()
+        today = timezone.now()
         y, m = today.year, today.month + (ym or 0)
     else:
         raise RuntimeError("Unsupported argument %r" % ym)
@@ -130,14 +131,14 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
 
             >>> Event.YM(2016, 12)
             <class 'dmdp.apps.datastore.models.Event_2016_12'>
-            >>> Event.YM(datetime.date.today())
+            >>> Event.YM(timezone.now())
             <class 'dmdp.apps.datastore.models.Event_2016_12'>
             >>> Event.YM()  # for current month
             <class 'dmdp.apps.datastore.models.Event_2016_12'>
             """
             if month is None:
                 if year is None:
-                    year = datetime.date.today()
+                    year = timezone.now()
 
                 month = year.month
                 year = year.year
