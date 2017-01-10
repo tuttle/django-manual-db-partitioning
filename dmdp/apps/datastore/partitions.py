@@ -39,7 +39,7 @@ def resolve_month(ym):
     if isinstance(ym, (tuple, list)):
         y, m = ym
     elif isinstance(ym, (datetime.datetime, datetime.date)):
-        y, m = ym.year, ym.month
+        y, m = ym.year, ym.month-1
     elif isinstance(ym, int) or ym is None:
         today = timezone.now()
         y, m = today.year, today.month + (ym or 0)
