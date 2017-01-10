@@ -68,7 +68,7 @@ class Command(BaseCommand):
         # Individually
 
         for day in self.iter_last_days(50):
-            browser_id = Browser.YM(day).get_or_create_cached_pk_for('Wget')
+            browser_id = Browser.YM(day).get_or_create_cached_pk_for(ua='Wget')
 
             Event.YM(day).objects.create(
                 timestamp=day,
@@ -82,7 +82,7 @@ class Command(BaseCommand):
         bulks = defaultdict(list)
 
         for day in self.iter_last_days(50):
-            browser_id = Browser.YM(day).get_or_create_cached_pk_for('Curl')
+            browser_id = Browser.YM(day).get_or_create_cached_pk_for(ua='Curl')
 
             EventYM = Event.YM(day)
             bulks[EventYM].append(
