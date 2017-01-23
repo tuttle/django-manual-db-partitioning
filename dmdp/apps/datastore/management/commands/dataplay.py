@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.transaction import atomic
 from django.utils import timezone
 
-from dmdp.apps.datastore.models import Event, Browser
+from dmdp.apps.datastore.models import Event, Browser, Session, Action
 
 
 class Command(BaseCommand):
@@ -22,13 +22,14 @@ class Command(BaseCommand):
         # So SQL commands gets logged to console.
         settings.DEBUG = True
 
-        self.play_simple()
-        self.play_many()
+        self.play_months_simple()
+        self.play_months_many()
+        self.play_range_many()
 
         # rolls back the database
         raise SystemExit
 
-    def play_simple(self):
+    def play_months_simple(self):
         CurBrowser = Browser.YM()
         CurEvent = Event.YM()
 
@@ -60,7 +61,7 @@ class Command(BaseCommand):
             yield day
             day -= delta
 
-    def play_many(self):
+    def play_months_many(self):
         """
         Create events for the most recent 50 days pointing to the same browser.
         """
@@ -100,5 +101,46 @@ class Command(BaseCommand):
         for BrowserYM, EventYM in zip(Browser.iter_YMs(), Event.iter_YMs()):
             self.out('%s - %s items' % (BrowserYM._meta.object_name, BrowserYM.objects.count()))
             self.out('%s - %s items' % (EventYM._meta.object_name, EventYM.objects.count()))
+
+        self.out()
+
+    def play_range_many(self):
+        # Individually
+
+        for website_id in xrange(12):
+            session_id = Session.partition(website_id).get_or_create_cached_pk_for(
+                website_id=website_id,
+            )
+
+            Action.partition(website_id).objects.create(
+                session_id=session_id,
+            )
+
+        self.out()
+
+        # In bulk
+
+        bulks = defaultdict(list)
+
+        for website_id in xrange(15):
+            session_id = Session.partition(website_id).get_or_create_cached_pk_for(
+                website_id=website_id,
+            )
+
+            ActionP = Action.partition(website_id)
+            bulks[ActionP].append(
+                ActionP(
+                    session_id=session_id,
+                )
+            )
+
+        for model, items in bulks.items():
+            model.objects.bulk_create(items)
+
+        self.out()
+
+        for SessionP, ActionP in zip(Session.iter_partitions(), Action.iter_partitions()):
+            self.out('%s - %s items' % (SessionP._meta.object_name, SessionP.objects.count()))
+            self.out('%s - %s items' % (ActionP._meta.object_name, ActionP.objects.count()))
 
         self.out()

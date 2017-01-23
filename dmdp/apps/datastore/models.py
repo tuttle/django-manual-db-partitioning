@@ -31,3 +31,21 @@ class Event(models.Model):
 
     def __unicode__(self):
         return self.timestamp.strftime("%F %T")
+
+
+@partitions.make_model_range_partitioned(5, globals())
+class Session(models.Model, caching.GocPkCacheMixin):
+    website_id = models.IntegerField()
+
+    class Meta:
+        abstract = True
+
+
+@partitions.make_model_range_partitioned(5, globals())
+class Action(models.Model):
+    session = partitions.ForeignKeyToPartition(Session, related_name='action_set', null=True, blank=True)
+    timestamp = models.DateTimeField(default=datetime.datetime.now)
+    some_value = models.IntegerField(default=0)
+
+    class Meta:
+        abstract = True

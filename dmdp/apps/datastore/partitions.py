@@ -8,7 +8,8 @@ from django.utils import timezone
 class ForeignKeyToPartition(object):
     """
     A proxy "field" waiting to be transformed to the real models.ForeignKey pointing
-    to the target model's partition of the same month.
+    to the same partition of the target model.
+
     Example::
 
         @make_model_monthly_partitioned(globals())
@@ -143,7 +144,9 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
                 month = year.month
                 year = year.year
 
-            return module_globals['%s_%04d_%02d' % (name, year, month)]
+            return module_globals[
+                '%s_%04d_%02d' % (name, year, month)
+            ]
 
         model_class.YM = staticmethod(YM)
 
@@ -157,6 +160,93 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
                 yield cls.YM(year, month)
 
         model_class.iter_YMs = classmethod(iter_YMs)
+
+        return model_class
+
+    return maker
+
+
+def make_model_range_partitioned(number_of_partitions, module_globals):
+    """
+    A model-class decorator. Example:
+
+        @make_model_range_partitioned(10, globals())
+        class Action(models.Model):
+            ...
+            class Meta:
+                abstract = True
+
+    This will dynamically create models for partitions from p0 to p9 in the same module.
+    Then it adds static method Action.partition to quickly get appropriate partition model.
+    Also an iterator Action.iter_partitions is added to get iterator through all partitions.
+    Class attribute Action.number_of_partitions is also set for convenience.
+    """
+    def maker(model_class):
+        name = model_class._meta.object_name
+
+        for part_index in xrange(number_of_partitions):
+            model_name = '%s_p%d' % (name, part_index)
+
+            if model_name in module_globals:
+                raise RuntimeError("Model %s already exists!" % model_name)
+
+            class Meta:
+                verbose_name = verbose_name_plural = '%s (part %d)' % (name, part_index)
+
+            attrs = {
+                '__module__': module_globals['__name__'],
+                'Meta': Meta,
+            }
+
+            # Reflect all the ForeignKeyToPartition promises as appropriate ForeignKey fields.
+
+            for fk_field_name, proxy in model_class.__dict__.items():
+                if isinstance(proxy, ForeignKeyToPartition):
+                    if number_of_partitions != proxy.target_partitioned_model.number_of_partitions:
+                        raise RuntimeError(
+                            "Target model %s has different number of partitions (%d) than "
+                            "referencing model %s (%d)." % (
+                                proxy.target_partitioned_model._meta.object_name,
+                                proxy.target_partitioned_model.number_of_partitions,
+                                name,
+                                number_of_partitions,
+                            )
+                        )
+
+                    attrs[fk_field_name] = ForeignKey(
+                        to=proxy.target_partitioned_model.partition(part_index),
+                        *proxy.fk_args,
+                        **proxy.fk_kwargs
+                    )
+
+            # Dynamically create the model class in the module.
+
+            module_globals[model_name] = type(
+                model_name,
+                (model_class,),
+                attrs,
+            )
+
+        def partition(cls, part_index):
+            """
+            A static method to retrieve specific partition model.
+            For convenience it never goes out of range (computes modulo).
+            """
+            return module_globals[
+                '%s_p%d' % (name, part_index % cls.number_of_partitions)
+            ]
+
+        model_class.partition = classmethod(partition)
+        model_class.number_of_partitions = number_of_partitions
+
+        def iter_partitions(cls):
+            """
+            Gets all partitions for the model.
+            """
+            for part_index in xrange(cls.number_of_partitions):
+                yield cls.partition(part_index)
+
+        model_class.iter_partitions = classmethod(iter_partitions)
 
         return model_class
 

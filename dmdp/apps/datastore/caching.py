@@ -32,7 +32,7 @@ class GocPkCacheMixin(object):
     @classmethod
     def get_or_create_cached_pk_for(cls, gocpk_cache_timeout=DEFAULT_TIMEOUT, **kwargs):
         """
-        Returns the cached primary key for unique object value.
+        Returns the cached primary key for given object values combination.
         """
         key = cls.get_goccache_key(kwargs)
         pk = cache.get(key)
