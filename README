@@ -6,10 +6,11 @@ Recommendations:
 
 	* Clone into a virtualenv
 
-	* Install these PyPI:
+	* Install these PyPI packages:
 
-	    Django 1.9
+	    django~=1.9.0
 	    psycopg2
+	    useful
 
 	* Create database:
 
@@ -30,5 +31,5 @@ Drawbacks:
 New partitions get created via *standard* Django migrations, so no other
 infrastructure is involved, which is good.
 
-But the same also means new partitions only get created (as time goes by)
+But the same also means new monthly partitions only get created (as time goes by)
 via the *source code change* using the `makemigrations` management command.

@@ -24,6 +24,7 @@ class Command(BaseCommand):
 
         self.play_months_simple()
         self.play_months_many()
+
         self.play_range_many()
 
         # rolls back the database

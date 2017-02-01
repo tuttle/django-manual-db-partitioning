@@ -3,6 +3,7 @@ import datetime
 from django.conf import settings
 from django.db.models import ForeignKey
 from django.utils import timezone
+from useful.consistent_hash import ConsistentHashRing
 
 
 class ForeignKeyToPartition(object):
@@ -90,8 +91,8 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
     Then it adds static method Event.YM to quickly get appropriate partition model.
     Also an iterator Event.iter_YMs is added to get multiple partitions.
     """
-    def maker(model_class):
-        name = model_class._meta.object_name
+    def maker(base_model_class):
+        name = base_model_class._meta.object_name
 
         for year, month in iter_months(start_ym, end_ym):
             model_name = '%s_%04d_%02d' % (name, year, month)
@@ -109,7 +110,7 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
 
             # Reflect all the ForeignKeyToPartition promises as appropriate ForeignKey fields.
 
-            for fk_field_name, proxy in model_class.__dict__.items():
+            for fk_field_name, proxy in base_model_class.__dict__.items():
                 if isinstance(proxy, ForeignKeyToPartition):
                     attrs[fk_field_name] = ForeignKey(
                         to=proxy.target_partitioned_model.YM(year, month),
@@ -121,7 +122,7 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
 
             module_globals[model_name] = type(
                 model_name,
-                (model_class,),
+                (base_model_class,),
                 attrs,
             )
 
@@ -148,7 +149,7 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
                 '%s_%04d_%02d' % (name, year, month)
             ]
 
-        model_class.YM = staticmethod(YM)
+        base_model_class.YM = staticmethod(YM)
 
         def iter_YMs(cls, start_ym=None, end_ym=None):
             """
@@ -159,9 +160,9 @@ def make_model_monthly_partitioned(module_globals, start_ym=None, end_ym=+6):
             for year, month in iter_months(start_ym, end_ym):
                 yield cls.YM(year, month)
 
-        model_class.iter_YMs = classmethod(iter_YMs)
+        base_model_class.iter_YMs = classmethod(iter_YMs)
 
-        return model_class
+        return base_model_class
 
     return maker
 
@@ -177,15 +178,19 @@ def make_model_range_partitioned(number_of_partitions, module_globals):
                 abstract = True
 
     This will dynamically create models for partitions from p0 to p9 in the same module.
-    Then it adds static method Action.partition to quickly get appropriate partition model.
+    Then it adds static method Action.partition to quickly get appropriate partition model;
+    this method takes the key that could be of any stringable value.
+    Consistent hashing ring takes the responsibility to spread all keys uniformly to partitions.
     Also an iterator Action.iter_partitions is added to get iterator through all partitions.
     Class attribute Action.number_of_partitions is also set for convenience.
+    An auxiliary method Action.partition_indexed can be used to retrieve partition model by its index.
     """
-    def maker(model_class):
-        name = model_class._meta.object_name
+    def maker(base_model_class):
+        partition_tmpl = '%s_p%d'
+        name = base_model_class._meta.object_name
 
         for part_index in xrange(number_of_partitions):
-            model_name = '%s_p%d' % (name, part_index)
+            model_name = partition_tmpl % (name, part_index)
 
             if model_name in module_globals:
                 raise RuntimeError("Model %s already exists!" % model_name)
@@ -200,21 +205,23 @@ def make_model_range_partitioned(number_of_partitions, module_globals):
 
             # Reflect all the ForeignKeyToPartition promises as appropriate ForeignKey fields.
 
-            for fk_field_name, proxy in model_class.__dict__.items():
+            for fk_field_name, proxy in base_model_class.__dict__.items():
                 if isinstance(proxy, ForeignKeyToPartition):
-                    if number_of_partitions != proxy.target_partitioned_model.number_of_partitions:
+                    Tgt = proxy.target_partitioned_model
+
+                    if number_of_partitions != Tgt.number_of_partitions:
                         raise RuntimeError(
                             "Target model %s has different number of partitions (%d) than "
                             "referencing model %s (%d)." % (
-                                proxy.target_partitioned_model._meta.object_name,
-                                proxy.target_partitioned_model.number_of_partitions,
+                                Tgt._meta.object_name,
+                                Tgt.number_of_partitions,
                                 name,
                                 number_of_partitions,
                             )
                         )
 
                     attrs[fk_field_name] = ForeignKey(
-                        to=proxy.target_partitioned_model.partition(part_index),
+                        to=Tgt.partition_indexed(part_index),
                         *proxy.fk_args,
                         **proxy.fk_kwargs
                     )
@@ -223,31 +230,43 @@ def make_model_range_partitioned(number_of_partitions, module_globals):
 
             module_globals[model_name] = type(
                 model_name,
-                (model_class,),
+                (base_model_class,),
                 attrs,
             )
 
-        def partition(cls, part_index):
+        def partition_indexed(part_index):
             """
-            A static method to retrieve specific partition model.
-            For convenience it never goes out of range (computes modulo).
+            A static method to retrieve partition model based on its exact index.
             """
             return module_globals[
-                '%s_p%d' % (name, part_index % cls.number_of_partitions)
+                partition_tmpl % (name, part_index)
             ]
+        base_model_class.partition_indexed = staticmethod(partition_indexed)
 
-        model_class.partition = classmethod(partition)
-        model_class.number_of_partitions = number_of_partitions
+        def partition(cls, key):
+            """
+            A class method returning the partition model for this key.
+            The key can be any value convertible to string; it is consistently hashed.
+            """
+            return cls.partition_indexed(
+                cls.hash_ring.select_bucket(key),
+            )
+        base_model_class.partition = classmethod(partition)
+
+        base_model_class.hash_ring = ConsistentHashRing(
+            xrange(number_of_partitions),
+        )
+        base_model_class.number_of_partitions = number_of_partitions
 
         def iter_partitions(cls):
             """
-            Gets all partitions for the model.
+            Gets all partition models for the base model.
             """
             for part_index in xrange(cls.number_of_partitions):
-                yield cls.partition(part_index)
+                yield cls.partition_indexed(part_index)
 
-        model_class.iter_partitions = classmethod(iter_partitions)
+        base_model_class.iter_partitions = classmethod(iter_partitions)
 
-        return model_class
+        return base_model_class
 
     return maker
